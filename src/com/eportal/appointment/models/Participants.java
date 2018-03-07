@@ -4,11 +4,10 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import com.eportal.appointment.sql.MySqlConnect;
+import com.eportal.appointment.utils.AppointmentClashChecker;
 import com.eportal.appointment.utils.Constants;
 import com.eportal.appointment.utils.TimeAPIWrapper;
 
@@ -16,6 +15,7 @@ public class Participants {
 	private String employeeId;
 	private Appointment appointment;
 	public static List<Participants> notAvailableParticipants = new ArrayList<Participants>();
+	private TimeAPIWrapper timeWrapper = new TimeAPIWrapper();
 	
 	public String getEmployeeId() {
 		return employeeId;
@@ -47,6 +47,10 @@ public class Participants {
 		}
 	}
 	
+	
+	
+	
+	
 	public boolean isAvailable() throws SQLException, Exception{
 		try{
 			MySqlConnect instance = new MySqlConnect(Constants.DATABASENAME);
@@ -69,7 +73,6 @@ public class Participants {
 			instance.close();
 			return true;
 			
-			
 		}catch(SQLException e){
 			e.printStackTrace();
 			throw new SQLException();
@@ -80,43 +83,25 @@ public class Participants {
 	}
 	
 	public boolean isColliding(ResultSet rs) throws SQLException, Exception{
-		String appointmentId = rs.getString("appointmentFK");
-		System.out.println(appointmentId);
+		int appointmentId = rs.getInt("appointmentFK");
 			try{
-				MySqlConnect instance = new MySqlConnect(Constants.DATABASENAME);
-				PreparedStatement pq = instance.getConnect().prepareStatement("SELECT * FROM Appointment WHERE appointmentId = ?");
-				pq.setString(1,appointmentId);
+				MySqlConnect sqlInstance = new MySqlConnect(Constants.DATABASENAME);
+				String sql = "SELECT `startTime`,`endTime`,`appoinmentId`,`repetition` FROM Appointments WHERE appoinmentId = ?";
+				PreparedStatement pq = sqlInstance.getConnect().prepareStatement(sql);
+				pq.setInt(1,appointmentId);
 				ResultSet appointmentRs = pq.executeQuery();
-				if(appointmentRs.next()){
-					TimeAPIWrapper wrapper = new TimeAPIWrapper();
-					String startTime = appointmentRs.getString("startTime");
-					String endTime = appointmentRs.getString("endTime");
-					
-					Map<String,Long> durationMap = new HashMap<String,Long>();
-										
-					durationMap.put("previousStart",wrapper.toepochSeconds(wrapper.instantFromString(startTime)));
-					durationMap.put("previousEnd",wrapper.toepochSeconds(wrapper.instantFromString(endTime)));
-					
-					durationMap.put("currentStart",wrapper.toepochSeconds(wrapper.instantFromString(this.getAppointment().getStartUTC())));
-					durationMap.put("currentEnd",wrapper.toepochSeconds(wrapper.instantFromString(this.getAppointment().getEndUTC())));
-					return this.CollidingCheck(durationMap);	
-				}else{
-					return false;
+				
+				while(appointmentRs.next()){
+					AppointmentClashChecker.addToStagedAppointments(this.appointment.getAppointmentId(),this.appointment.getStartInstant(),this.appointment.getEndInstant(),this.appointment.getRepetition(),appointmentRs.getTimestamp(2));
+					AppointmentClashChecker.createPossibleDateTime(appointmentRs.getTimestamp(1),appointmentRs.getTimestamp(2),this.appointment.getEndInstant(),appointmentRs.getString(4));
+					AppointmentClashChecker.getCollidingAppointmentIds(appointmentRs.getString(4));
+					return true;
 				}
+				
+				return true;
 			}catch(SQLException e){
 				e.printStackTrace();
 				throw new SQLException();
 			}
-		}
-	
-	public boolean CollidingCheck(Map<String,Long> durationMap){
-		if(((durationMap.get("currentStart") <= durationMap.get("previousStart")) && 
-				(durationMap.get("currentEnd")) <= durationMap.get("previousStart"))){
-			return false; 
-		}else if((durationMap.get("currentStart") >= durationMap.get("previousEnd")) &&
-				(durationMap.get("currentEnd")) >= durationMap.get("previousEnd")){
-			return false;
-		}
-		return true;
-	}
+		}	
 }

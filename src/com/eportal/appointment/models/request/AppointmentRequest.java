@@ -54,6 +54,7 @@ public class AppointmentRequest {
 		appointment.setEndDate(this.getDuration().getEndDate());
 		appointment.setStartTime(this.getDuration().getStartTime());
 		appointment.setEndTime(this.getDuration().getEndTime());
+		appointment.setRepetition(this.getDuration().getRepetition().toLowerCase());
 		appointment.setListOfParticipants(this.toParticipantsModel());
 		
 		return appointment;

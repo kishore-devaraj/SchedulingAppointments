@@ -5,6 +5,7 @@ public class Duration {
 	private String endDate;
 	private String startTime;
 	private String endTime;
+	private String repetition;
 	
 	public String getStartDate() {
 		return startDate;
@@ -31,8 +32,15 @@ public class Duration {
 		this.endTime = endTime;
 	}
 	
+	public String getRepetition() {
+		return repetition;
+	}
+	public void setRepetition(String repetition) {
+		this.repetition = repetition;
+	}
+	
 	public boolean isAssigned(){
-		if((this.getStartDate() != null) && (this.getEndDate() != null) && (this.startTime != null) && (this.endTime != null)){
+		if((this.getStartDate() != null) && (this.getEndDate() != null) && (this.startTime != null) && (this.endTime != null) && (this.repetition != null)){
 			return true;
 		}else{
 			return false;

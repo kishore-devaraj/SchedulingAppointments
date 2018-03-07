@@ -4,6 +4,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -21,15 +22,39 @@ public class Appointment {
 	private String endTime;
 	private String startDate;
 	private String endDate;
+	private String repetition;
 	
-	private String startUTC;
-	private String endUTC;
+	private long duration;
+	
+	private long startUTC;
+	private long endUTC;
+	
+	private long startDateUTC;
+	private long endDateUTC;
 	
 	private int appointmentId;
 	private List<Participants> listOfParticipants;
 	
 	public static boolean Creationstatus;
 	
+	private Instant startInstant;
+	private Instant endInstant;
+	
+	
+	
+	public Instant getStartInstant() {
+		return startInstant;
+	}
+	public void setStartInstant(Instant startInstant) {
+		this.startInstant = startInstant;
+	}
+	
+	public Instant getEndInstant() {
+		return endInstant;
+	}
+	public void setEndInstant(Instant endInstant) {
+		this.endInstant = endInstant;
+	}
 	public String getOrganiser() {
 		return organiser;
 	}
@@ -72,20 +97,42 @@ public class Appointment {
 	public void setEndDate(String endDate) {
 		this.endDate = endDate;
 	}
+	public String getRepetition() {
+		return repetition;
+	}
+	public void setRepetition(String repetition) {
+		this.repetition = repetition;
+	}
+	public long getStartDateUTC() {
+		return startDateUTC;
+	}
+	public void setStartDateUTC(long startDateUTC) {
+		this.startDateUTC = startDateUTC;
+	}
+	public long getEndDateUTC() {
+		return endDateUTC;
+	}
+	public void setEndDateUTC(long endDateUTC) {
+		this.endDateUTC = endDateUTC;
+	}
+	public long getDuration() {
+		return duration;
+	}
+	public void setDuration() {
+		this.duration = (this.endUTC - this.startUTC);
+	}
+		
 	
-	
-	
-	
-	public String getStartUTC() {
+	public long getStartUTC() {
 		return startUTC;
 	}
-	public void setStartUTC(String startUTC) {
+	public void setStartUTC(long startUTC) {
 		this.startUTC = startUTC;
 	}
-	public String getEndUTC() {
+	public long getEndUTC() {
 		return endUTC;
 	}
-	public void setEndUTC(String endUTC) {
+	public void setEndUTC(long endUTC) {
 		this.endUTC = endUTC;
 	}
 	public int getAppointmentId() {
@@ -108,21 +155,24 @@ public class Appointment {
 		try{
 			sqlConnect = new MySqlConnect(Constants.DATABASENAME);
 			sqlConnect.getConnect().setAutoCommit(false);
-			PreparedStatement pq = sqlConnect.getConnect().prepareStatement("INSERT INTO Appointment(`title`,`description`,`organiser`,`startTime`,`endTime`) VALUES(?,?,?,?,?)",Statement.RETURN_GENERATED_KEYS);
+			String sql = "INSERT INTO Appointments(`startTime`,`endTime`,`repetition`)"
+					+ "VALUES(?,?,?)";
+			PreparedStatement pq = sqlConnect.getConnect().prepareStatement(sql,Statement.RETURN_GENERATED_KEYS);
 			
-			TimeAPIWrapper wrapper = new TimeAPIWrapper();
+			TimeAPIWrapper timeWrapper = new TimeAPIWrapper();
 			
-			Instant instant = wrapper.instantFromDateTime(wrapper.getLocalDate(wrapper.dateParser(this.getStartDate())),wrapper.getLocalTime(wrapper.timeParser(this.getStartTime())));
-			this.setStartUTC(instant.toString());
+			Instant startInstant = timeWrapper.instantFromDateTime(timeWrapper.getLocalDate(timeWrapper.dateParser(this.getStartDate())),timeWrapper.getLocalTime(timeWrapper.timeParser(this.getStartTime())));
+			this.setStartInstant(startInstant);
+			pq.setTimestamp(1,Timestamp.from(startInstant));
 			
-			instant = wrapper.instantFromDateTime(wrapper.getLocalDate(wrapper.dateParser(this.getEndDate())),wrapper.getLocalTime(wrapper.timeParser(this.getEndTime())));
-			this.setEndUTC(instant.toString());
+			Instant endInstant = timeWrapper.instantFromDateTime(timeWrapper.getLocalDate(timeWrapper.dateParser(this.getEndDate())),timeWrapper.getLocalTime(timeWrapper.timeParser(this.getEndTime())));
+			this.setEndInstant(endInstant);
 			
-			pq.setString(1,this.getTitle());
-			pq.setString(2,this.getDescription());
-			pq.setString(3,this.getOrganiser());
-			pq.setString(4,this.getStartUTC());
-			pq.setString(5,this.getEndUTC());
+			System.out.println(this.getStartInstant());
+			System.out.println(this.getEndInstant());
+			
+			pq.setTimestamp(2,Timestamp.from(endInstant));
+			pq.setString(3,this.getRepetition());
 			
 			int results = pq.executeUpdate();
 			ResultSet rs = pq.getGeneratedKeys();
@@ -130,20 +180,18 @@ public class Appointment {
 				this.setAppointmentId(rs.getInt(1));
 			}
 			
+			
 			System.out.println(results + " rows affected in appointment tables");
 			System.out.println("AppointmentId is " + this.getAppointmentId());
 			
-			// Check whether all the employees are valid
 			
+			// Check whether all the employees are valid
 			try{
 				boolean isAppointmentEligible = true;
-				
-				// Update the Guest Table with the appointment Id
 				for(Participants participant: this.getListOfParticipants()){
 					participant.setAppointment(this);
 					boolean isAvailable = participant.isAvailable();
 					System.out.println("Available " + isAvailable);
-					
 					
 					if(isAvailable){
 						participant.toEntity(sqlConnect);						
@@ -156,10 +204,12 @@ public class Appointment {
 				
 				if(isAppointmentEligible){
 					sqlConnect.getConnect().commit();
+					sqlConnect.close();
 					System.out.println("Appointment is Created");
 					Creationstatus = true;
 				}else{
 					sqlConnect.getConnect().rollback();
+					sqlConnect.close();
 					System.out.println("Appointment is Cancelled");
 					Creationstatus = false;
 				}
@@ -167,10 +217,9 @@ public class Appointment {
 			}catch(Exception e){
 				e.printStackTrace();
 				sqlConnect.getConnect().rollback();
+				sqlConnect.close();
 			}
 			
-			sqlConnect.close();
-			sqlConnect = null;
 		
 		}catch(MySQLIntegrityConstraintViolationException e){
 			throw new MySQLIntegrityConstraintViolationException();
@@ -180,12 +229,6 @@ public class Appointment {
 		}catch(Exception e){
 			e.printStackTrace();
 			throw new Exception();
-		}finally{
-			if(sqlConnect != null){
-				sqlConnect.getConnect().rollback();
-				sqlConnect.close();
-			}
 		}
 	}
-	
 }
